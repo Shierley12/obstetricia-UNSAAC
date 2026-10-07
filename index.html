@@ -1,0 +1,1363 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mundo 3D: Exploración y Salud Juvenil</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- Tone.js Sound Engine -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- JSZip for client-side ZIP creation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: none;
+        }
+
+        #game-canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .roblox-panel {
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(16px);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+        }
+
+        .roblox-button {
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+            border: 2px solid #60a5fa;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+            box-shadow: 0 4px 0 #1e40af, 0 6px 12px rgba(0,0,0,0.4);
+            transition: all 0.12s ease-in-out;
+            cursor: pointer;
+        }
+
+        .roblox-button:hover {
+            filter: brightness(1.1);
+        }
+
+        .roblox-button:active {
+            transform: translateY(3px);
+            box-shadow: 0 1px 0 #1e40af, 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .roblox-button-green {
+            background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
+            border: 2px solid #4ade80;
+            box-shadow: 0 4px 0 #166534, 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        .roblox-button-purple {
+            background: linear-gradient(180deg, #a855f7 0%, #7e22ce 100%);
+            border: 2px solid #c084fc;
+            box-shadow: 0 4px 0 #6b21a8, 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        .roblox-button-amber {
+            background: linear-gradient(180deg, #f59e0b 0%, #b45309 100%);
+            border: 2px solid #fcd34d;
+            box-shadow: 0 4px 0 #78350f, 0 6px 12px rgba(0,0,0,0.4);
+        }
+
+        .crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 8px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.85);
+            border: 2px solid rgba(0, 0, 0, 0.6);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+        }
+
+        .touch-joystick-base {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.18);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            touch-action: none;
+            z-index: 40;
+        }
+
+        .touch-joystick-stick {
+            width: 50px;
+            height: 50px;
+            background: rgba(59, 130, 246, 0.9);
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            position: absolute;
+            top: 35px;
+            left: 35px;
+            pointer-events: none;
+            box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+        }
+
+        .subtitles-box {
+            background: rgba(15, 23, 42, 0.92);
+            border: 2px solid #38bdf8;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3);
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white overflow-hidden select-none">
+
+    <!-- 3D WebGL Canvas -->
+    <canvas id="game-canvas"></canvas>
+
+    <!-- Center Crosshair -->
+    <div class="crosshair"></div>
+
+    <!-- HUD Top Center: Active Mission Banner -->
+    <div class="absolute top-4 left-1/2 -translate-x-1/2 z-20 w-11/12 max-w-xl">
+        <div class="roblox-panel rounded-2xl p-3 flex items-center justify-between gap-3 text-white">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600/30 border border-blue-400 flex items-center justify-center text-blue-400 text-lg animate-pulse">
+                    <i class="fa-solid fa-location-dot"></i>
+                </div>
+                <div>
+                    <div class="text-[10px] font-bold uppercase tracking-wider text-blue-300">Misión Activa</div>
+                    <div id="objective-text" class="text-sm md:text-base font-bold text-white">📍 Dirígete al Colegio y habla con el Profesor</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 bg-slate-800/90 px-3 py-1.5 rounded-xl border border-slate-700">
+                <i class="fa-solid fa-star text-yellow-400 text-lg"></i>
+                <span id="score-display" class="font-extrabold text-yellow-400 text-sm md:text-base">0 pts</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD Top Right: Voice, ZIP Downloader, Controls & Badges -->
+    <div class="absolute top-4 right-4 z-20 flex flex-col items-end gap-2">
+        <button id="btn-download-zip" class="roblox-button roblox-button-amber px-3 py-2 rounded-xl text-white font-bold flex items-center gap-2 text-xs shadow-lg">
+            <i class="fa-solid fa-file-zipper text-sm"></i>
+            <span>Descargar .ZIP</span>
+        </button>
+        <button id="btn-audio" class="roblox-panel p-2.5 rounded-xl text-slate-300 hover:text-white transition flex items-center gap-2 text-xs">
+            <i id="audio-icon" class="fa-solid fa-volume-high text-base text-green-400"></i>
+            <span class="hidden md:inline">Voz y Audio</span>
+        </button>
+        <button id="btn-controls" class="roblox-panel p-2.5 rounded-xl text-slate-300 hover:text-white transition flex items-center gap-2 text-xs">
+            <i class="fa-solid fa-gamepad text-base text-cyan-400"></i>
+            <span class="hidden md:inline">Controles</span>
+        </button>
+        <button id="btn-badges" class="roblox-panel p-2.5 rounded-xl text-slate-300 hover:text-white transition flex items-center gap-2 text-xs">
+            <i class="fa-solid fa-award text-base text-yellow-400"></i>
+            <span class="hidden md:inline">Logros</span>
+        </button>
+    </div>
+
+    <!-- HUD Bottom Left: 2D Minimap -->
+    <div class="absolute bottom-4 left-4 z-20 flex flex-col items-start gap-2">
+        <div class="relative roblox-panel p-2 rounded-2xl border-2 border-slate-700 shadow-2xl overflow-hidden">
+            <div class="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex justify-between items-center px-1">
+                <span><i class="fa-solid fa-compass text-cyan-400 mr-1"></i> Radar 3D</span>
+                <span id="zone-tag" class="text-cyan-300 font-bold">Colegio</span>
+            </div>
+            <canvas id="minimap" width="150" height="150" class="rounded-xl bg-slate-950 border border-slate-800"></canvas>
+            <div class="absolute bottom-3 right-3 bg-slate-900/90 text-[9px] px-1.5 py-0.5 rounded text-slate-300 border border-slate-700">
+                <span class="inline-block w-2 h-2 rounded-full bg-red-500 mr-1"></span> Objetivo
+            </div>
+        </div>
+    </div>
+
+    <!-- HUD Interaction Prompt (Dynamic Floating Button) -->
+    <div id="interaction-prompt" class="hidden absolute bottom-28 left-1/2 -translate-x-1/2 z-30 animate-bounce">
+        <button id="btn-interact" class="roblox-button roblox-button-green px-6 py-3 rounded-2xl font-black text-white text-base md:text-lg flex items-center gap-3">
+            <span class="bg-white/20 px-2.5 py-1 rounded-lg border border-white/40 text-xs font-mono">E</span>
+            <span id="interaction-text">Hablar con Profesor Carlos</span>
+        </button>
+    </div>
+
+    <!-- Touch Mobile Controls -->
+    <div id="touch-controls" class="hidden">
+        <div id="joystick-base" class="touch-joystick-base">
+            <div id="joystick-stick" class="touch-joystick-stick"></div>
+        </div>
+        <div class="absolute bottom-6 right-6 z-30 flex flex-col gap-3 items-end">
+            <button id="btn-touch-jump" class="w-16 h-16 rounded-full roblox-button flex items-center justify-center text-xl font-bold active:scale-95 shadow-lg">
+                <i class="fa-solid fa-arrow-up"></i>
+            </button>
+            <button id="btn-touch-run" class="w-14 h-14 rounded-full bg-amber-600 border-2 border-amber-400 text-white flex items-center justify-center text-lg active:scale-95 shadow-lg">
+                <i class="fa-solid fa-bolt"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Voice Subtitles Display & NPC Dialog Modal -->
+    <div id="dialog-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-4">
+        <div class="roblox-panel subtitles-box w-full max-w-2xl rounded-3xl p-6 border-2 border-cyan-500/80 shadow-2xl relative animate-in fade-in slide-in-from-bottom duration-300">
+            <div class="flex items-center gap-4 mb-4 pb-4 border-b border-slate-700/80">
+                <div id="npc-avatar" class="w-16 h-16 rounded-2xl bg-cyan-600/30 border-2 border-cyan-400 flex items-center justify-center text-3xl shadow-inner">
+                    👩‍⚕️
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h3 id="npc-name" class="text-xl font-black text-cyan-300 tracking-wide">Dra. Ana</h3>
+                        <span id="voice-indicator" class="text-xs bg-green-500/20 text-green-400 border border-green-500/40 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse">
+                            <i class="fa-solid fa-volume-high"></i> Voz Activa
+                        </span>
+                    </div>
+                    <p id="npc-role" class="text-xs text-slate-300 font-medium">Obstetra / Educadora de Salud</p>
+                </div>
+                <button id="btn-close-dialog" class="ml-auto text-slate-400 hover:text-white text-xl p-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            
+            <div class="min-h-[100px] mb-6 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+                <p id="dialog-text" class="text-slate-100 text-base md:text-lg leading-relaxed font-semibold">
+                    ¡Bienvenid@ a la Ciudad de la Salud Juvenil!
+                </p>
+            </div>
+
+            <div id="dialog-actions" class="flex flex-wrap items-center justify-between gap-3">
+                <button id="btn-replay-voice" class="bg-slate-800 hover:bg-slate-700 text-cyan-300 px-4 py-2 rounded-xl text-xs font-bold border border-slate-700 flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i> Repetir Voz
+                </button>
+                <button id="btn-dialog-next" class="roblox-button roblox-button-green px-6 py-2.5 rounded-xl font-bold text-sm md:text-base flex items-center gap-2">
+                    <span>Siguiente</span>
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Classification Mini-Game Modal -->
+    <div id="minigame-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-2xl rounded-3xl p-6 border-2 border-purple-500/50 shadow-2xl">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-700">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-purple-500/20 border border-purple-400 flex items-center justify-center text-purple-400 text-lg">
+                        <i class="fa-solid fa-vial-circle-check"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-purple-300">Laboratorio: Clasifica los Métodos</h3>
+                        <p class="text-xs text-slate-400">Selecciona la categoría correcta para cada método anticonceptivo</p>
+                    </div>
+                </div>
+                <span id="minigame-score" class="text-xs bg-slate-800 text-purple-300 font-bold px-3 py-1 rounded-full border border-slate-700">Progreso: 0/3</span>
+            </div>
+
+            <div id="minigame-content" class="space-y-4">
+                <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700">
+                    <h4 id="item-title" class="text-lg font-bold text-white mb-1">🛡️ Preservativo Masculino / Femenino</h4>
+                    <p id="item-desc" class="text-xs text-slate-300 mb-4">¿A qué categoría pertenece según su mecanismo de acción?</p>
+                    
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <button onclick="checkClassification('barrera')" class="roblox-button py-3 px-3 rounded-xl text-xs font-bold text-center">
+                            🛡️ Método de Barrera
+                        </button>
+                        <button onclick="checkClassification('hormonal')" class="roblox-button py-3 px-3 rounded-xl text-xs font-bold text-center">
+                            💉 Método Hormonal
+                        </button>
+                        <button onclick="checkClassification('emergencia')" class="roblox-button py-3 px-3 rounded-xl text-xs font-bold text-center">
+                            ⚡ Método de Emergencia
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="minigame-feedback" class="hidden p-3 rounded-xl mt-4 text-xs font-semibold flex items-center gap-2"></div>
+        </div>
+    </div>
+
+    <!-- Quiz Modal -->
+    <div id="quiz-modal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-xl rounded-3xl p-6 border-2 border-yellow-500/50 shadow-2xl">
+            <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-700">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-xl bg-yellow-500/20 border border-yellow-400 flex items-center justify-center text-yellow-400">
+                        <i class="fa-solid fa-bullseye text-lg"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-black text-yellow-400">Zona de Retos: Desafío de Mitos</h3>
+                        <p class="text-xs text-slate-400">Responde las preguntas para completar el entrenamiento</p>
+                    </div>
+                </div>
+                <span id="quiz-counter" class="text-xs bg-slate-800 text-yellow-300 font-bold px-3 py-1 rounded-full border border-slate-700">1 / 2</span>
+            </div>
+
+            <div class="mb-6">
+                <h4 id="quiz-question" class="text-base md:text-lg font-bold text-white mb-4">¿Cuál de los siguientes métodos previene las Infecciones de Transmisión Sexual (ITS)?</h4>
+                <div id="quiz-options" class="flex flex-col gap-3"></div>
+            </div>
+
+            <div id="quiz-feedback" class="hidden p-3 rounded-xl mb-4 text-xs font-semibold flex items-center gap-2"></div>
+        </div>
+    </div>
+
+    <!-- Controls Modal -->
+    <div id="controls-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-md rounded-3xl p-6 border-2 border-blue-500/50 shadow-2xl">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700">
+                <h3 class="text-lg font-black text-cyan-300 flex items-center gap-2">
+                    <i class="fa-solid fa-gamepad"></i> Controles del Juego
+                </h3>
+                <button id="btn-close-controls" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="space-y-2.5 text-sm text-slate-200">
+                <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                    <span>Moverse</span>
+                    <span class="font-mono bg-slate-700 px-2 py-1 rounded text-xs font-bold">W A S D / Flechas</span>
+                </div>
+                <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                    <span>Correr</span>
+                    <span class="font-mono bg-slate-700 px-2 py-1 rounded text-xs font-bold">SHIFT</span>
+                </div>
+                <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                    <span>Saltar</span>
+                    <span class="font-mono bg-slate-700 px-2 py-1 rounded text-xs font-bold">ESPACIO</span>
+                </div>
+                <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                    <span>Girar Cámara</span>
+                    <span class="font-mono bg-slate-700 px-2 py-1 rounded text-xs font-bold">Click + Arrastrar</span>
+                </div>
+                <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl">
+                    <span>Interactuar</span>
+                    <span class="font-mono bg-slate-700 px-2 py-1 rounded text-xs font-bold">Tecla E o F</span>
+                </div>
+            </div>
+            <button id="btn-gotit-controls" class="w-full mt-5 roblox-button py-2.5 rounded-xl font-bold text-sm">¡Entendido!</button>
+        </div>
+    </div>
+
+    <!-- Badges Modal -->
+    <div id="badges-modal" class="hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-md flex items-center justify-center p-4">
+        <div class="roblox-panel w-full max-w-lg rounded-3xl p-6 border-2 border-yellow-500/50 shadow-2xl">
+            <div class="flex justify-between items-center mb-4 pb-2 border-b border-slate-700">
+                <h3 class="text-lg font-black text-yellow-400 flex items-center gap-2">
+                    <i class="fa-solid fa-trophy"></i> Logros e Insignias
+                </h3>
+                <button id="btn-close-badges" class="text-slate-400 hover:text-white text-lg">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div id="badges-list" class="grid grid-cols-2 gap-3 mb-4 max-h-[300px] overflow-y-auto pr-1"></div>
+            <button id="btn-gotit-badges" class="w-full roblox-button py-2.5 rounded-xl font-bold text-sm">Cerrar</button>
+        </div>
+    </div>
+
+    <!-- Notification Toast Banner -->
+    <div id="toast" class="hidden fixed top-20 left-1/2 -translate-x-1/2 z-50 roblox-panel px-6 py-3 rounded-2xl border-2 border-green-400 text-green-300 font-bold shadow-2xl flex items-center gap-3 animate-bounce">
+        <i class="fa-solid fa-circle-check text-xl text-green-400"></i>
+        <span id="toast-msg">¡Misión completada!</span>
+    </div>
+
+    <script>
+        const gameState = {
+            currentMissionIndex: 0,
+            score: 0,
+            audioEnabled: true,
+            badges: [
+                { id: 'school', title: 'Inicio Escolar', desc: 'Hablaste con el Profesor Carlos', icon: '🏫', unlocked: false },
+                { id: 'health', title: 'Explorador de Salud', desc: 'Consultaste a la Dra. Ana', icon: '🩺', unlocked: false },
+                { id: 'barrier', title: 'Doble Protección', desc: 'Inspeccionaste el preservativo', icon: '🛡️', unlocked: false },
+                { id: 'lab', title: 'Científico Científico', desc: 'Clasificaste métodos en el Laboratorio', icon: '🧪', unlocked: false },
+                { id: 'quiz', title: 'Cazador de Mitos', desc: 'Superaste el desafío de preguntas', icon: '🎯', unlocked: false },
+                { id: 'champion', title: 'Campeón de Salud', desc: 'Completaste todas las misiones', icon: '🏆', unlocked: false }
+            ]
+        };
+
+        const missions = [
+            {
+                id: 0,
+                title: "📍 Habla con el Profesor Carlos en el Colegio",
+                targetPos: { x: -35, z: -28 },
+                zoneName: "Colegio",
+                npcName: "Profesor Carlos",
+                npcRole: "Director Escolar",
+                npcAvatar: "👨‍🏫",
+                isFemaleVoice: false,
+                dialogs: [
+                    "¡Hola! Bienvenid@ a la Ciudad de la Salud Juvenil.",
+                    "En este mundo aprenderás a cuidar tu cuerpo y tomar decisiones informadas sobre la salud sexual y reproductiva.",
+                    "Para empezar tu recorrido, dirígete al CENTRO DE SALUD JUVENIL y conversa con la Dra. Ana."
+                ],
+                rewardScore: 100
+            },
+            {
+                id: 1,
+                title: "📍 Dirígete al Centro de Salud Juvenil (Dra. Ana)",
+                targetPos: { x: 35, z: -28 },
+                zoneName: "Centro de Salud",
+                npcName: "Dra. Ana",
+                npcRole: "Obstetra / Educadora de Salud",
+                npcAvatar: "👩‍⚕️",
+                isFemaleVoice: true,
+                dialogs: [
+                    "¡Bienvenid@ al Centro de Salud Juvenil! Soy la Dra. Ana, obstetra.",
+                    "Los métodos anticonceptivos son herramientas fundamentales para planificar nuestro futuro y prevenir embarazos no planificados.",
+                    "Existen métodos de Barrera como los condones masculinos y femeninos, métodos Hormonales como pastillas, inyectables e implantes, y métodos de Emergencia.",
+                    "Es esencial recordar que el condón es el ÚNICO método que previene tanto embarazos como Infecciones de Transmisión Sexual (ITS).",
+                    "¡Busca el PRESERVATIVO brillante sobre la mesa de la clínica para examinarlo!"
+                ],
+                rewardScore: 150
+            },
+            {
+                id: 2,
+                title: "🔎 Encuentra e inspecciona el Preservativo",
+                targetPos: { x: 38, z: -28 },
+                zoneName: "Centro de Salud",
+                isItemQuest: true,
+                rewardScore: 200
+            },
+            {
+                id: 3,
+                title: "📍 Ve al Laboratorio Educativo (Dra. Beatriz)",
+                targetPos: { x: 35, z: 28 },
+                zoneName: "Laboratorio",
+                npcName: "Dra. Beatriz",
+                npcRole: "Investigadora en Salud",
+                npcAvatar: "🧪",
+                isFemaleVoice: true,
+                dialogs: [
+                    "¡Excelente trabajo! Bienvenidos al Laboratorio Científico Educativo.",
+                    "Aquí demostramos cómo funcionan los diferentes métodos anticonceptivos y su clasificación.",
+                    "Pondremos a prueba tu aprendizaje en la consola interactiva de clasificación."
+                ],
+                rewardScore: 200
+            },
+            {
+                id: 4,
+                title: "📍 Dirígete a la Zona de Retos y responde la Trivia",
+                targetPos: { x: -35, z: 28 },
+                zoneName: "Zona de Retos",
+                isQuizQuest: true,
+                rewardScore: 250
+            },
+            {
+                id: 5,
+                title: "🏆 ¡Dirígete a la Plaza Central para la Graduación!",
+                targetPos: { x: 0, z: -5 },
+                zoneName: "Plaza Central",
+                npcName: "Coordinadora Juvenil",
+                npcRole: "Líder Comunitaria",
+                npcAvatar: "👑",
+                isFemaleVoice: true,
+                dialogs: [
+                    "¡Felicitaciones! Has completado exitosamente todo el recorrido educativo.",
+                    "Ahora cuentas con conocimientos valiosos para ejercer tus derechos de salud de forma responsable y segura.",
+                    "¡Recibe la insignia de CAMPEÓN DE SALUD JUVENIL y explora la ciudad libremente!"
+                ],
+                rewardScore: 500
+            }
+        ];
+
+        const textToSpeechEngine = {
+            femaleVoice: null,
+            maleVoice: null,
+            initVoices() {
+                if (!('speechSynthesis' in window)) return;
+                const updateVoices = () => {
+                    const voices = window.speechSynthesis.getVoices();
+                    const spanishVoices = voices.filter(v => v.lang.startsWith('es'));
+                    
+                    this.femaleVoice = spanishVoices.find(v => 
+                        v.name.includes('Monica') || v.name.includes('Paulina') || 
+                        v.name.includes('Sabina') || v.name.includes('Helena') || 
+                        v.name.includes('Laura') || v.name.includes('Google español') ||
+                        v.name.includes('Female')
+                    ) || spanishVoices[0] || voices[0];
+
+                    this.maleVoice = spanishVoices.find(v => 
+                        v.name.includes('Jorge') || v.name.includes('Carlos') || 
+                        v.name.includes('Pablo') || v.name.includes('Male')
+                    ) || spanishVoices[0] || voices[0];
+                };
+
+                updateVoices();
+                if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                    window.speechSynthesis.onvoiceschanged = updateVoices;
+                }
+            },
+            speak(text, isFemale = true) {
+                if (!gameState.audioEnabled || !('speechSynthesis' in window)) return;
+                window.speechSynthesis.cancel();
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'es-ES';
+                utterance.rate = 0.95;
+                utterance.pitch = isFemale ? 1.15 : 0.95;
+
+                const selectedVoice = isFemale ? this.femaleVoice : this.maleVoice;
+                if (selectedVoice) utterance.voice = selectedVoice;
+
+                window.speechSynthesis.speak(utterance);
+            },
+            stop() {
+                if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+            }
+        };
+
+        textToSpeechEngine.initVoices();
+
+        document.getElementById('btn-download-zip')?.addEventListener('click', () => {
+            if (typeof JSZip === 'undefined') {
+                showToast("Cargando modulo de compresión...");
+                return;
+            }
+
+            const zip = new JSZip();
+            const currentHTML = document.documentElement.outerHTML;
+            
+            zip.file("index.html", "<!DOCTYPE html>\n" + currentHTML);
+            zip.file("LEEME.txt", 
+                "====================================================\n" +
+                "JUEGO EDUCATIVO 3D: SALUD Y EXPLORACIÓN JUVENIL\n" +
+                "====================================================\n\n" +
+                "Instrucciones de Uso:\n" +
+                "1. Extrae el contenido de este archivo ZIP.\n" +
+                "2. Haz doble clic en 'index.html' para abrir el juego directamente en tu navegador web.\n" +
+                "3. Funciona en Google Chrome, Microsoft Edge, Firefox, Safari y dispositivos móviles.\n\n" +
+                "¡Que disfrutes la experiencia de aprendizaje en 3D!"
+            );
+
+            zip.generateAsync({ type: "blob" }).then(function (content) {
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(content);
+                link.download = "Juego_3D_Salud_Juvenil.zip";
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                showToast("📦 ¡Archivo ZIP descargado con éxito!");
+            });
+        });
+
+        // Sound Effects Engine (Tone.js)
+        const sfx = {
+            synth: null, poly: null,
+            init() {
+                try {
+                    this.synth = new Tone.Synth().toDestination();
+                    this.poly = new Tone.PolySynth().toDestination();
+                } catch(e) {}
+            },
+            playClick() {
+                if (gameState.audioEnabled && this.synth) {
+                    try { this.synth.triggerAttackRelease("C5", "16n"); } catch(e){}
+                }
+            },
+            playSuccess() {
+                if (gameState.audioEnabled && this.poly) {
+                    try { this.poly.triggerAttackRelease(["C5", "E5", "G5", "C6"], "8n"); } catch(e){}
+                }
+            },
+            playJump() {
+                if (gameState.audioEnabled && this.synth) {
+                    try { this.synth.triggerAttackRelease("G4", "16n"); } catch(e){}
+                }
+            }
+        };
+
+        const canvas = document.getElementById('game-canvas');
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x7dd3fc);
+        scene.fog = new THREE.FogExp2(0x7dd3fc, 0.007);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 500);
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+        scene.add(ambientLight);
+
+        const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        dirLight.position.set(60, 90, 50);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.camera.near = 0.5;
+        dirLight.shadow.camera.far = 300;
+        const d = 90;
+        dirLight.shadow.camera.left = -d; dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d; dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        // Ground World Terrain (180x180)
+        const groundGeo = new THREE.PlaneGeometry(180, 180);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x4ade80, roughness: 0.8 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        // Road Crossways
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
+        const roadH = new THREE.Mesh(new THREE.PlaneGeometry(180, 14), roadMat);
+        roadH.rotation.x = -Math.PI / 2; roadH.position.y = 0.02; roadH.receiveShadow = true;
+        scene.add(roadH);
+
+        const roadV = new THREE.Mesh(new THREE.PlaneGeometry(14, 180), roadMat);
+        roadV.rotation.x = -Math.PI / 2; roadV.position.y = 0.02; roadV.receiveShadow = true;
+        scene.add(roadV);
+
+        const colliders = [];
+        const interactiveEntities = [];
+
+        function createBuilding(x, z, width, length, height, color, name, icon) {
+            const group = new THREE.Group();
+            group.position.set(x, 0, z);
+
+            const geo = new THREE.BoxGeometry(width, height, length);
+            const mat = new THREE.MeshStandardMaterial({ color: color, roughness: 0.3 });
+            const mesh = new THREE.Mesh(geo, mat);
+            mesh.position.y = height / 2;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            group.add(mesh);
+
+            const roofGeo = new THREE.BoxGeometry(width + 1.2, 1.2, length + 1.2);
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = height + 0.6;
+            roof.castShadow = true;
+            group.add(roof);
+
+            const doorGeo = new THREE.BoxGeometry(4.5, 6, 0.4);
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0x0f172a });
+            const door = new THREE.Mesh(doorGeo, doorMat);
+            door.position.set(0, 3, length / 2 + 0.1);
+            group.add(door);
+
+            const padGeo = new THREE.RingGeometry(1, 4, 32);
+            const padMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.6 });
+            const pad = new THREE.Mesh(padGeo, padMat);
+            pad.rotation.x = Math.PI / 2;
+            pad.position.set(0, 0.05, length / 2 + 4);
+            group.add(pad);
+
+            const signCanvas = document.createElement('canvas');
+            signCanvas.width = 512; signCanvas.height = 128;
+            const ctx = signCanvas.getContext('2d');
+            ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, 512, 128);
+            ctx.fillStyle = '#ffffff'; ctx.font = 'bold 32px sans-serif';
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(`${icon} ${name}`, 256, 64);
+
+            const signTex = new THREE.CanvasTexture(signCanvas);
+            const signGeo = new THREE.PlaneGeometry(14, 3.5);
+            const signMat = new THREE.MeshBasicMaterial({ map: signTex });
+            const sign = new THREE.Mesh(signGeo, signMat);
+            sign.position.set(0, height - 2, length / 2 + 0.2);
+            group.add(sign);
+
+            scene.add(group);
+            colliders.push(new THREE.Box3().setFromObject(mesh));
+            return group;
+        }
+
+        createBuilding(-35, -35, 24, 20, 11, 0xf43f5e, "COLEGIO JUVENIL", "🏫");
+        createBuilding(35, -35, 26, 22, 11, 0x0284c7, "CENTRO DE SALUD", "🏥");
+        createBuilding(35, 35, 22, 22, 11, 0x9333ea, "LABORATORIO EDUCATIVO", "🧪");
+        createBuilding(-35, 35, 24, 20, 10, 0xf59e0b, "ZONA DE RETOS", "🎯");
+
+        // Central Fountain & Trophy Stage
+        const fountain = new THREE.Mesh(new THREE.CylinderGeometry(8, 9, 2, 16), new THREE.MeshStandardMaterial({ color: 0x64748b }));
+        fountain.position.set(0, 1, 0); fountain.receiveShadow = true;
+        scene.add(fountain);
+
+        const water = new THREE.Mesh(new THREE.CylinderGeometry(7.5, 7.5, 2.1, 16), new THREE.MeshStandardMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.8 }));
+        water.position.set(0, 1, 0); scene.add(water);
+
+        const trophyGroup = new THREE.Group();
+        trophyGroup.position.set(0, 2.2, 0);
+        const trophyBase = new THREE.Mesh(new THREE.BoxGeometry(2.5, 1.5, 2.5), new THREE.MeshStandardMaterial({ color: 0x1e293b }));
+        const trophyCup = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 0.5, 3.5, 12), new THREE.MeshStandardMaterial({ color: 0xeab308, metalness: 0.8, roughness: 0.2 }));
+        trophyCup.position.y = 2.5;
+        trophyGroup.add(trophyBase); trophyGroup.add(trophyCup);
+        scene.add(trophyGroup);
+
+        class PlayerCharacter {
+            constructor() {
+                this.group = new THREE.Group();
+
+                const skinMat = new THREE.MeshStandardMaterial({ color: 0xfde047 });
+                const shirtMat = new THREE.MeshStandardMaterial({ color: 0x2563eb });
+                const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b });
+
+                this.head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), skinMat);
+                this.head.position.y = 3.8; this.head.castShadow = true;
+                this.group.add(this.head);
+
+                this.torso = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.9), shirtMat);
+                this.torso.position.y = 2.3; this.torso.castShadow = true;
+                this.group.add(this.torso);
+
+                this.leftArm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.7), shirtMat);
+                this.leftArm.position.set(-1.2, 2.3, 0); this.leftArm.castShadow = true;
+                this.group.add(this.leftArm);
+
+                this.rightArm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.8, 0.7), shirtMat);
+                this.rightArm.position.set(1.2, 2.3, 0); this.rightArm.castShadow = true;
+                this.group.add(this.rightArm);
+
+                this.leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.6, 0.75), pantsMat);
+                this.leftLeg.position.set(-0.4, 0.8, 0); this.leftLeg.castShadow = true;
+                this.group.add(this.leftLeg);
+
+                this.rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.75, 1.6, 0.75), pantsMat);
+                this.rightLeg.position.set(0.4, 0.8, 0); this.rightLeg.castShadow = true;
+                this.group.add(this.rightLeg);
+
+                this.group.position.set(-35, 0, -18);
+                scene.add(this.group);
+
+                this.velocity = new THREE.Vector3();
+                this.isGrounded = true;
+                this.walkSpeed = 12;
+                this.runSpeed = 22;
+                this.jumpForce = 14;
+                this.animTime = 0;
+            }
+
+            update(delta, inputDir, isRunning, isJumping) {
+                const speed = isRunning ? this.runSpeed : this.walkSpeed;
+
+                if (inputDir.lengthSq() > 0) {
+                    inputDir.normalize();
+
+                    const cameraYaw = cameraRotation.yaw;
+                    const moveX = inputDir.x * Math.cos(cameraYaw) + inputDir.z * Math.sin(cameraYaw);
+                    const moveZ = -inputDir.x * Math.sin(cameraYaw) + inputDir.z * Math.cos(cameraYaw);
+
+                    const nextX = this.group.position.x + moveX * speed * delta;
+                    const nextZ = this.group.position.z + moveZ * speed * delta;
+
+                    if (Math.abs(nextX) < 84) this.group.position.x = nextX;
+                    if (Math.abs(nextZ) < 84) this.group.position.z = nextZ;
+
+                    const targetAngle = Math.atan2(moveX, moveZ);
+                    this.group.rotation.y = targetAngle;
+
+                    this.animTime += delta * speed * 1.2;
+                    this.leftArm.rotation.x = Math.sin(this.animTime) * 0.8;
+                    this.rightArm.rotation.x = -Math.sin(this.animTime) * 0.8;
+                    this.leftLeg.rotation.x = -Math.sin(this.animTime) * 0.8;
+                    this.rightLeg.rotation.x = Math.sin(this.animTime) * 0.8;
+                } else {
+                    this.leftArm.rotation.x = 0; this.rightArm.rotation.x = 0;
+                    this.leftLeg.rotation.x = 0; this.rightLeg.rotation.x = 0;
+                }
+
+                if (isJumping && this.isGrounded) {
+                    this.velocity.y = this.jumpForce;
+                    this.isGrounded = false;
+                    sfx.playJump();
+                }
+
+                if (!this.isGrounded) {
+                    this.velocity.y -= 36 * delta;
+                    this.group.position.y += this.velocity.y * delta;
+
+                    if (this.group.position.y <= 0) {
+                        this.group.position.y = 0;
+                        this.velocity.y = 0;
+                        this.isGrounded = true;
+                    }
+                }
+            }
+        }
+
+        const player = new PlayerCharacter();
+
+        class NPC {
+            constructor(x, z, name, role, color, icon, isFemale = true) {
+                this.name = name; this.role = role; this.isFemale = isFemale;
+                this.group = new THREE.Group();
+                this.group.position.set(x, 0, z);
+
+                const skinMat = new THREE.MeshStandardMaterial({ color: 0xffedd5 });
+                const clothesMat = new THREE.MeshStandardMaterial({ color: color });
+
+                const head = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 1.2), skinMat); head.position.y = 3.8;
+                const torso = new THREE.Mesh(new THREE.BoxGeometry(1.6, 1.8, 0.9), clothesMat); torso.position.y = 2.3;
+                const legs = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.6, 0.8), new THREE.MeshStandardMaterial({ color: 0x334155 })); legs.position.y = 0.8;
+
+                this.group.add(head); this.group.add(torso); this.group.add(legs);
+
+                const nameCanvas = document.createElement('canvas');
+                nameCanvas.width = 256; nameCanvas.height = 64;
+                const ctx = nameCanvas.getContext('2d');
+                ctx.fillStyle = '#0f172a'; ctx.fillRect(0,0,256,64);
+                ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 24px sans-serif';
+                ctx.textAlign = 'center'; ctx.fillText(`${icon} ${name}`, 128, 40);
+
+                const nameTex = new THREE.CanvasTexture(nameCanvas);
+                const nameMesh = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.8), new THREE.MeshBasicMaterial({ map: nameTex, side: THREE.DoubleSide }));
+                nameMesh.position.y = 5.2;
+                this.group.add(nameMesh);
+
+                scene.add(this.group);
+                interactiveEntities.push({ type: 'npc', object: this, pos: { x, z } });
+            }
+        }
+
+        const npcSchool = new NPC(-35, -28, "Profesor Carlos", "Colegio", 0xf59e0b, "👨‍🏫", false);
+        const npcHealth = new NPC(35, -28, "Dra. Ana", "Obstetra", 0x0284c7, "👩‍⚕️", true);
+        const npcLab = new NPC(35, 28, "Dra. Beatriz", "Investigadora", 0x9333ea, "🧪", true);
+        const npcMayor = new NPC(0, -5, "Coordinadora Juvenil", "Plaza", 0xeab308, "👑", true);
+
+        // Interactive 3D Condom Item
+        const condomGroup = new THREE.Group();
+        condomGroup.position.set(38, 1.2, -28);
+        const condomMesh = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.3, 1.4), new THREE.MeshStandardMaterial({ color: 0x38bdf8, roughness: 0.2, metalness: 0.6 }));
+        condomGroup.add(condomMesh);
+        scene.add(condomGroup);
+
+        interactiveEntities.push({ type: 'item', name: 'Preservativo', pos: { x: 38, z: -28 } });
+
+        // 3D Waypoint Arrow
+        const waypointArrow = new THREE.Group();
+        const arrowMesh = new THREE.Mesh(new THREE.ConeGeometry(1.2, 3, 8), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+        arrowMesh.rotation.x = Math.PI;
+        waypointArrow.add(arrowMesh);
+        scene.add(waypointArrow);
+
+        const cameraRotation = { yaw: 0, pitch: 0.3, distance: 16 };
+        let isMouseDown = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.target === canvas) {
+                isMouseDown = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            }
+        });
+
+        window.addEventListener('mouseup', () => isMouseDown = false);
+        window.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            const deltaX = e.clientX - previousMousePosition.x;
+            const deltaY = e.clientY - previousMousePosition.y;
+
+            cameraRotation.yaw -= deltaX * 0.005;
+            cameraRotation.pitch += deltaY * 0.005;
+            cameraRotation.pitch = Math.max(0.1, Math.min(Math.PI / 2.5, cameraRotation.pitch));
+
+            previousMousePosition = { x: e.clientX, y: e.clientY };
+        });
+
+        window.addEventListener('wheel', (e) => {
+            cameraRotation.distance += e.deltaY * 0.01;
+            cameraRotation.distance = Math.max(6, Math.min(30, cameraRotation.distance));
+        });
+
+        const keys = { w: false, a: false, s: false, d: false, shift: false, space: false, e: false };
+
+        window.addEventListener('keydown', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = true;
+            if (k === 'a' || k === 'arrowleft') keys.a = true;
+            if (k === 's' || k === 'arrowdown') keys.s = true;
+            if (k === 'd' || k === 'arrowright') keys.d = true;
+            if (e.key === 'Shift') keys.shift = true;
+            if (e.key === ' ') keys.space = true;
+            if (k === 'e' || k === 'f') {
+                keys.e = true;
+                triggerActiveInteraction();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            const k = e.key.toLowerCase();
+            if (k === 'w' || k === 'arrowup') keys.w = false;
+            if (k === 'a' || k === 'arrowleft') keys.a = false;
+            if (k === 's' || k === 'arrowdown') keys.s = false;
+            if (k === 'd' || k === 'arrowright') keys.d = false;
+            if (e.key === 'Shift') keys.shift = false;
+            if (e.key === ' ') keys.space = false;
+            if (k === 'e' || k === 'f') keys.e = false;
+        });
+
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isTouchDevice) {
+            document.getElementById('touch-controls').classList.remove('hidden');
+        }
+
+        const joystickBase = document.getElementById('joystick-base');
+        const joystickStick = document.getElementById('joystick-stick');
+        let joystickVector = { x: 0, y: 0 };
+        let joystickActive = false;
+
+        if (joystickBase) {
+            joystickBase.addEventListener('touchstart', (e) => {
+                joystickActive = true;
+                updateJoystick(e.touches[0]);
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                if (joystickActive && e.touches.length > 0) updateJoystick(e.touches[0]);
+            });
+
+            window.addEventListener('touchend', () => {
+                joystickActive = false;
+                joystickVector = { x: 0, y: 0 };
+                joystickStick.style.top = '35px'; joystickStick.style.left = '35px';
+            });
+        }
+
+        function updateJoystick(touch) {
+            const rect = joystickBase.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            let dx = touch.clientX - centerX;
+            let dy = touch.clientY - centerY;
+            const dist = Math.hypot(dx, dy);
+            const maxDist = 45;
+
+            if (dist > maxDist) {
+                dx = (dx / dist) * maxDist;
+                dy = (dy / dist) * maxDist;
+            }
+
+            joystickStick.style.left = `${35 + dx}px`;
+            joystickStick.style.top = `${35 + dy}px`;
+
+            joystickVector.x = dx / maxDist;
+            joystickVector.y = dy / maxDist;
+        }
+
+        document.getElementById('btn-touch-jump')?.addEventListener('touchstart', (e) => {
+            e.preventDefault(); keys.space = true;
+            setTimeout(() => keys.space = false, 200);
+        });
+
+        document.getElementById('btn-touch-run')?.addEventListener('touchstart', (e) => {
+            e.preventDefault(); keys.shift = !keys.shift;
+        });
+
+        const minimapCanvas = document.getElementById('minimap');
+        const mctx = minimapCanvas.getContext('2d');
+
+        function drawMinimap() {
+            const w = minimapCanvas.width; const h = minimapCanvas.height;
+            const scale = w / 180;
+
+            mctx.clearRect(0, 0, w, h);
+            mctx.fillStyle = '#0f172a'; mctx.fillRect(0, 0, w, h);
+
+            mctx.fillStyle = '#334155';
+            mctx.fillRect(0, (90 - 7) * scale, w, 14 * scale);
+            mctx.fillRect((90 - 7) * scale, 0, 14 * scale, h);
+
+            const buildings = [
+                { x: -35, z: -35, size: 24, color: '#f43f5e' },
+                { x: 35, z: -35, size: 26, color: '#0284c7' },
+                { x: 35, z: 35, size: 22, color: '#a855f7' },
+                { x: -35, z: 35, size: 24, color: '#f59e0b' }
+            ];
+
+            buildings.forEach(b => {
+                const bx = (b.x + 90 - b.size / 2) * scale;
+                const bz = (b.z + 90 - b.size / 2) * scale;
+                mctx.fillStyle = b.color;
+                mctx.fillRect(bx, bz, b.size * scale, b.size * scale);
+            });
+
+            const currMission = missions[gameState.currentMissionIndex];
+            if (currMission && currMission.targetPos) {
+                const tx = (currMission.targetPos.x + 90) * scale;
+                const tz = (currMission.targetPos.z + 90) * scale;
+
+                mctx.fillStyle = '#ef4444';
+                mctx.beginPath(); mctx.arc(tx, tz, 5, 0, Math.PI * 2); mctx.fill();
+            }
+
+            const px = (player.group.position.x + 90) * scale;
+            const pz = (player.group.position.z + 90) * scale;
+
+            mctx.save();
+            mctx.translate(px, pz);
+            mctx.rotate(-player.group.rotation.y);
+            mctx.fillStyle = '#38bdf8';
+            mctx.beginPath();
+            mctx.moveTo(0, -6); mctx.lineTo(5, 5); mctx.lineTo(-5, 5);
+            mctx.closePath(); mctx.fill();
+            mctx.restore();
+        }
+
+        const interactionPrompt = document.getElementById('interaction-prompt');
+        const interactionText = document.getElementById('interaction-text');
+        let activeEntity = null;
+
+        function checkProximity() {
+            const pPos = player.group.position;
+            let found = null;
+
+            interactiveEntities.forEach(ent => {
+                const dist = Math.hypot(pPos.x - ent.pos.x, pPos.z - ent.pos.z);
+                if (dist < 4.8) found = ent;
+            });
+
+            if (found) {
+                activeEntity = found;
+                if (found.type === 'npc') interactionText.textContent = `Hablar con ${found.object.name}`;
+                else if (found.type === 'item') interactionText.textContent = `Inspeccionar ${found.name}`;
+                interactionPrompt.classList.remove('hidden');
+            } else {
+                activeEntity = null;
+                interactionPrompt.classList.add('hidden');
+            }
+        }
+
+        function triggerActiveInteraction() {
+            if (!activeEntity) return;
+            sfx.playClick();
+
+            if (activeEntity.type === 'npc') {
+                openDialogModal(activeEntity.object);
+            } else if (activeEntity.type === 'item') {
+                collectItemQuest();
+            }
+        }
+
+        document.getElementById('btn-interact').addEventListener('click', triggerActiveInteraction);
+
+        const dialogModal = document.getElementById('dialog-modal');
+        const npcAvatar = document.getElementById('npc-avatar');
+        const npcName = document.getElementById('npc-name');
+        const npcRole = document.getElementById('npc-role');
+        const dialogText = document.getElementById('dialog-text');
+        let dialogIndex = 0;
+
+        function openDialogModal(npc) {
+            dialogIndex = 0;
+            npcName.textContent = npc.name;
+            npcRole.textContent = npc.role;
+            npcAvatar.textContent = npc.isFemale ? "👩‍⚕️" : "👨‍🏫";
+            
+            const currMission = missions[gameState.currentMissionIndex];
+            if (currMission && currMission.dialogs) {
+                const phrase = currMission.dialogs[0];
+                dialogText.textContent = phrase;
+                textToSpeechEngine.speak(phrase, npc.isFemale);
+            } else {
+                const defaultPhrase = "¡Hola! Explora libremente los edificios para seguir aprendiendo.";
+                dialogText.textContent = defaultPhrase;
+                textToSpeechEngine.speak(defaultPhrase, npc.isFemale);
+            }
+
+            dialogModal.classList.remove('hidden');
+        }
+
+        document.getElementById('btn-replay-voice').addEventListener('click', () => {
+            const currMission = missions[gameState.currentMissionIndex];
+            if (currMission && currMission.dialogs) {
+                const phrase = currMission.dialogs[dialogIndex];
+                textToSpeechEngine.speak(phrase, currMission.isFemaleVoice !== false);
+            }
+        });
+
+        document.getElementById('btn-dialog-next').addEventListener('click', () => {
+            sfx.playClick();
+            const currMission = missions[gameState.currentMissionIndex];
+            dialogIndex++;
+
+            if (currMission && currMission.dialogs && dialogIndex < currMission.dialogs.length) {
+                const phrase = currMission.dialogs[dialogIndex];
+                dialogText.textContent = phrase;
+                textToSpeechEngine.speak(phrase, currMission.isFemaleVoice !== false);
+            } else {
+                textToSpeechEngine.stop();
+                dialogModal.classList.add('hidden');
+                
+                if (currMission && currMission.isQuizQuest) {
+                    openQuizModal();
+                } else if (gameState.currentMissionIndex === 3) {
+                    openMinigameModal();
+                } else {
+                    completeCurrentMission();
+                }
+            }
+        });
+
+        document.getElementById('btn-close-dialog').addEventListener('click', () => {
+            textToSpeechEngine.stop();
+            dialogModal.classList.add('hidden');
+        });
+
+        function collectItemQuest() {
+            condomGroup.visible = false;
+            showToast("¡Has inspeccionado el Preservativo! (+200 pts)");
+            completeCurrentMission();
+        }
+
+        // Classification Mini-Game
+        const minigameModal = document.getElementById('minigame-modal');
+        const classificationItems = [
+            { name: "🛡️ Preservativo Masculino/Femenino", type: "barrera", desc: "Forma una barrera física contra espermatozoides e ITS." },
+            { name: "💉 Implante Subdérmico / Pastillas", type: "hormonal", desc: "Libera hormonas para evitar la ovulación de forma segura." },
+            { name: "⚡ Pastilla del Día Después", type: "emergencia", desc: "Uso exclusivo de emergencia en las primeras 72 horas." }
+        ];
+        let currentClassIdx = 0;
+
+        function openMinigameModal() {
+            currentClassIdx = 0;
+            renderClassificationStep();
+            minigameModal.classList.remove('hidden');
+        }
+
+        function renderClassificationStep() {
+            const item = classificationItems[currentClassIdx];
+            document.getElementById('item-title').textContent = item.name;
+            document.getElementById('item-desc').textContent = item.desc;
+            document.getElementById('minigame-score').textContent = `Progreso: ${currentClassIdx}/${classificationItems.length}`;
+            document.getElementById('minigame-feedback').classList.add('hidden');
+        }
+
+        function checkClassification(chosenType) {
+            const item = classificationItems[currentClassIdx];
+            const feedback = document.getElementById('minigame-feedback');
+            feedback.classList.remove('hidden');
+
+            if (chosenType === item.type) {
+                sfx.playSuccess();
+                feedback.className = "p-3 rounded-xl mt-4 text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/50 flex items-center gap-2";
+                feedback.innerHTML = `<i class="fa-solid fa-circle-check"></i> ¡Correcto! Clasificación acertada.`;
+
+                setTimeout(() => {
+                    currentClassIdx++;
+                    if (currentClassIdx < classificationItems.length) {
+                        renderClassificationStep();
+                    } else {
+                        minigameModal.classList.add('hidden');
+                        showToast("¡Laboratorio superado! (+200 pts)");
+                        completeCurrentMission();
+                    }
+                }, 1200);
+            } else {
+                feedback.className = "p-3 rounded-xl mt-4 text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/50 flex items-center gap-2";
+                feedback.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Incorrecto. Revisa el mecanismo de acción.`;
+            }
+        }
+
+        // Quiz Challenge
+        const quizModal = document.getElementById('quiz-modal');
+        const quizQuestions = [
+            {
+                q: "¿Cuál de los siguientes métodos es el ÚNICO que previene las Infecciones de Transmisión Sexual (ITS)?",
+                options: ["Pastillas anticonceptivas", "Preservativo / Condón", "Implante subdérmico", "DIU"],
+                correct: 1
+            },
+            {
+                q: "¿El implante subdérmico previene las Infecciones de Transmisión Sexual?",
+                options: ["Sí, protege contra todo", "No, solo previene el embarazo", "A veces", "Solo el primer mes"],
+                correct: 1
+            }
+        ];
+        let quizIdx = 0;
+
+        function openQuizModal() {
+            quizIdx = 0;
+            renderQuizQuestion();
+            quizModal.classList.remove('hidden');
+        }
+
+        function renderQuizQuestion() {
+            const q = quizQuestions[quizIdx];
+            document.getElementById('quiz-question').textContent = q.q;
+            document.getElementById('quiz-counter').textContent = `${quizIdx + 1} / ${quizQuestions.length}`;
+            
+            const container = document.getElementById('quiz-options');
+            container.innerHTML = '';
+            document.getElementById('quiz-feedback').classList.add('hidden');
+
+            q.options.forEach((opt, i) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left p-3.5 rounded-2xl bg-slate-800/90 hover:bg-blue-600/30 border border-slate-700 text-sm font-semibold transition flex items-center justify-between";
+                btn.innerHTML = `<span>${opt}</span><i class="fa-solid fa-chevron-right text-slate-500"></i>`;
+                btn.onclick = () => answerQuiz(i);
+                container.appendChild(btn);
+            });
+        }
+
+        function answerQuiz(selected) {
+            const q = quizQuestions[quizIdx];
+            const feedback = document.getElementById('quiz-feedback');
+            feedback.classList.remove('hidden');
+
+            if (selected === q.correct) {
+                sfx.playSuccess();
+                feedback.className = "p-3 rounded-xl mb-4 text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/50 flex items-center gap-2";
+                feedback.innerHTML = `<i class="fa-solid fa-circle-check"></i> ¡Respuesta Correcta!`;
+
+                setTimeout(() => {
+                    quizIdx++;
+                    if (quizIdx < quizQuestions.length) {
+                        renderQuizQuestion();
+                    } else {
+                        quizModal.classList.add('hidden');
+                        showToast("¡Desafío de Trivia Superado! (+250 pts)");
+                        completeCurrentMission();
+                    }
+                }, 1200);
+            } else {
+                feedback.className = "p-3 rounded-xl mb-4 text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/50 flex items-center gap-2";
+                feedback.innerHTML = `<i class="fa-solid fa-circle-xmark"></i> Respuesta incorrecta. Inténtalo de nuevo.`;
+            }
+        }
+
+        function completeCurrentMission() {
+            const curr = missions[gameState.currentMissionIndex];
+            if (!curr) return;
+
+            gameState.score += curr.rewardScore;
+            updateScoreDisplay();
+
+            if (gameState.badges[gameState.currentMissionIndex]) {
+                gameState.badges[gameState.currentMissionIndex].unlocked = true;
+            }
+
+            if (gameState.currentMissionIndex < missions.length - 1) {
+                gameState.currentMissionIndex++;
+                const next = missions[gameState.currentMissionIndex];
+                document.getElementById('objective-text').textContent = next.title;
+                document.getElementById('zone-tag').textContent = next.zoneName;
+                showToast(`Nueva Misión: ${next.zoneName}`);
+                sfx.playSuccess();
+            } else {
+                showToast("🏆 ¡FELICIDADES! Completaste la experiencia.");
+                sfx.playSuccess();
+            }
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('score-display').textContent = `${gameState.score} pts`;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => toast.classList.add('hidden'), 3500);
+        }
+
+        document.getElementById('btn-audio').addEventListener('click', () => {
+            gameState.audioEnabled = !gameState.audioEnabled;
+            const icon = document.getElementById('audio-icon');
+            if (gameState.audioEnabled) {
+                icon.className = "fa-solid fa-volume-high text-base text-green-400";
+            } else {
+                icon.className = "fa-solid fa-volume-xmark text-base text-red-400";
+                textToSpeechEngine.stop();
+            }
+        });
+
+        document.getElementById('btn-controls').addEventListener('click', () => document.getElementById('controls-modal').classList.remove('hidden'));
+        document.getElementById('btn-close-controls').addEventListener('click', () => document.getElementById('controls-modal').classList.add('hidden'));
+        document.getElementById('btn-gotit-controls').addEventListener('click', () => document.getElementById('controls-modal').classList.add('hidden'));
+
+        document.getElementById('btn-badges').addEventListener('click', () => {
+            renderBadges();
+            document.getElementById('badges-modal').classList.remove('hidden');
+        });
+        document.getElementById('btn-close-badges').addEventListener('click', () => document.getElementById('badges-modal').classList.add('hidden'));
+        document.getElementById('btn-gotit-badges').addEventListener('click', () => document.getElementById('badges-modal').classList.add('hidden'));
+
+        function renderBadges() {
+            const list = document.getElementById('badges-list');
+            list.innerHTML = '';
+            gameState.badges.forEach(b => {
+                const item = document.createElement('div');
+                item.className = `p-3 rounded-2xl border flex items-center gap-3 ${b.unlocked ? 'bg-slate-800 border-yellow-500/60' : 'bg-slate-900/50 border-slate-800 opacity-40'}`;
+                item.innerHTML = `
+                    <div class="text-2xl">${b.icon}</div>
+                    <div>
+                        <div class="text-xs font-bold ${b.unlocked ? 'text-yellow-300' : 'text-slate-400'}">${b.title}</div>
+                        <div class="text-[10px] text-slate-400">${b.desc}</div>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            const inputDir = new THREE.Vector3();
+            if (keys.w) inputDir.z += 1;
+            if (keys.s) inputDir.z -= 1;
+            if (keys.a) inputDir.x += 1;
+            if (keys.d) inputDir.x -= 1;
+
+            if (joystickVector.x !== 0 || joystickVector.y !== 0) {
+                inputDir.x = -joystickVector.x;
+                inputDir.z = -joystickVector.y;
+            }
+
+            player.update(delta, inputDir, keys.shift, keys.space);
+
+            const pPos = player.group.position;
+            const camX = pPos.x + cameraRotation.distance * Math.sin(cameraRotation.yaw) * Math.cos(cameraRotation.pitch);
+            const camY = pPos.y + 2.5 + cameraRotation.distance * Math.sin(cameraRotation.pitch);
+            const camZ = pPos.z + cameraRotation.distance * Math.cos(cameraRotation.yaw) * Math.cos(cameraRotation.pitch);
+
+            camera.position.set(camX, camY, camZ);
+            camera.lookAt(pPos.x, pPos.y + 2.5, pPos.z);
+
+            const curr = missions[gameState.currentMissionIndex];
+            if (curr && curr.targetPos) {
+                waypointArrow.position.set(curr.targetPos.x, 8 + Math.sin(clock.getElapsedTime() * 3) * 0.8, curr.targetPos.z);
+                waypointArrow.rotation.y += delta * 2;
+                waypointArrow.visible = true;
+            } else {
+                waypointArrow.visible = false;
+            }
+
+            trophyGroup.rotation.y += delta * 0.8;
+
+            checkProximity();
+            drawMinimap();
+            renderer.render(scene, camera);
+        }
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        window.addEventListener('pointerdown', () => sfx.init(), { once: true });
+
+        window.onload = function() {
+            animate();
+            sfx.init();
+        };
+    </script>
+</body>
+</html>
